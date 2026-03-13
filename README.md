@@ -1,75 +1,120 @@
-# Sentiment_Analysis_Emails
+# 📧 Spam Detection using BERT — Transfer Learning for NLP
 
-BERT stands for Bidirectional Encoder Representations from Transformers. It's intended to use both left and right context conditioning to pre-train deep bidirectional representations from unlabeled text. As a result, with just one extra output layer, the pre-trained BERT model may be fine-tuned to generate state-of-the-art models for a wide range of NLP applications.
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.6-orange) ![BERT](https://img.shields.io/badge/Model-BERT-blue) ![Accuracy](https://img.shields.io/badge/Accuracy-88%25-green)
 
-In other words, the BERT scans the entire sequence of words at once, unlike directional models that read the text input sequentially (left-to-right). As a result, it is classified as bidirectional. This feature enables the model to learn the context of a word from its surroundings (to the left and right of the word).
+Not your average Naive Bayes spam filter. This project fine-tunes Google's BERT transformer for binary spam classification — using transfer learning so that only **769 parameters** need to be trained on top of a 109M-parameter language model.
 
-Fistly, since we are about to use tensorflow, we have to import some libraries ---
-  - %tensorflow_version 2.6
-  - import tensorflow as tf
-  - import tensorflow_hub as hub
-  - !pip install tensorflow-text
-  - import tensorflow_text as text
+---
 
-**NOTE** - *The versions are very important while imorting tensorflow*
+## 🤔 Why BERT?
 
-**Please refer to documentation https://www.tensorflow.org/text/tutorials/classify_text_with_bert and stackoverflow for issues**
+Most spam classifiers use TF-IDF + Naive Bayes or Logistic Regression. These treat words as independent frequency counts with no contextual understanding. Consider:
 
-*Here, I have used version-2.6* 
+> "You have a chance to **win a scholarship**" vs "You have a chance to **win $5000 — claim NOW**"
 
-To find about the emails , we first extrxated the mails dataset from https://www.kaggle.com/code/sid321axn/sms-spam-classifier-naive-bayes-ml-algo/data
-After the dataset was extracted we find it very uncertain and unbalanced.
-We can see the spam and ham valued datasets respectively
+A bag-of-words model sees both as near-identical. BERT reads the entire sentence bidirectionally and understands the difference.
 
-![unbal](https://user-images.githubusercontent.com/76419241/169275987-209bc3a2-33ff-4370-b97a-1239cd8948c4.png)
+| Approach | How it works | Context-aware? | Accuracy* |
+|---|---|---|---|
+| Naive Bayes (TF-IDF) | Word frequency counts | ❌ No | ~95% |
+| Logistic Regression | Bag-of-words features | ❌ No | ~96% |
+| LSTM | Sequential word patterns | ⚠️ Partially | ~97% |
+| **BERT (this project)** | Bidirectional transformer | ✅ Full context | **88%** |
 
+> **Note on accuracy:** Traditional ML scores higher here because spam often contains obvious keywords ("win", "$5000"). BERT's real advantage is on ambiguous, context-dependent sentences. This model also trains on only ~1,500 balanced samples vs ~5,500 for traditional models.
 
-So, we balance it by taking sample of ham upto size of spam
+---
 
-Now they are balanced
-![bal](https://user-images.githubusercontent.com/76419241/169276405-b80624a4-96e0-47c1-ad37-363eb43fe84b.png)
+## 📊 Dataset
 
+**Source:** [Kaggle — SMS Spam Dataset](https://www.kaggle.com/code/sid321axn/sms-spam-classifier-naive-bayes-ml-algo/data)
 
-After balancing, we can just make this categorical dataset by changing ham values to 0 and spam value as 1
+| Split | Ham (0) | Spam (1) | Total |
+|---|---|---|---|
+| Original | 4,825 | 747 | 5,572 (imbalanced) |
+| After undersampling | 747 | 747 | 1,494 (balanced) |
 
- After all the dataset work, we'll just divide our dataset in training and testing dataset using *train_test_split*
- 
- Now, we are ready to import the BERT MODEL
- We have to import the-
-  - preprocessor from "https://tfhub.dev/tensorflow/bert_en_uncased_preprocess/3"
-  - encoder from "https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/4"
+Labels: `ham → 0`, `spam → 1`
 
-To get function embeedings, we define a function
+---
 
-![func](https://user-images.githubusercontent.com/76419241/169283017-28c37369-f005-4f6c-be09-fe1ecc206426.png)
+## 🧠 Model Architecture
 
-   
-Now. we are ready to apply our training data on this function to get embeedings of sentences
-It even includes applying *DROPOUT AND DENSE* **NEURAL NETWORK LAYERS**
-More about them from here **https://towardsdatascience.com/machine-learning-part-20-dropout-keras-layers-explained-8c9f6dc4c9ab**
+> **Transfer learning key insight:** BERT's 109 million parameters are completely frozen — pre-trained on Wikipedia + BooksCorpus. Only the 769-parameter classification head is trained. The model leverages massive language understanding from just ~1,500 training samples.
 
-Finally, we will create model as **model = tf.keras.Model(inputs=[text_input], outputs=[l])**
+**BERT components (TensorFlow Hub):**
+- Preprocessor: [bert_en_uncased_preprocess/3](https://tfhub.dev/tensorflow/bert_en_uncased_preprocess/3)
+- Encoder: [bert_en_uncased_L-12_H-768_A-12/4](https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/4)
 
-The model summary looks like-
-![modlesum](https://user-images.githubusercontent.com/76419241/169275893-d5fcb361-b5ea-41fb-8d19-59784a324b40.png)
+| Layer | Output Shape | Params | Trainable? |
+|---|---|---|---|
+| BERT encoder (pooled) | (None, 768) | 109,482,241 | No (frozen) |
+| Dropout | (None, 768) | 0 | — |
+| Dense (sigmoid) | (None, 1) | 769 | **Yes** |
 
-After compiling model, we'll fit it with respective epochs on training data, **epochs can be adjusted accordingly**
-Then, we perfom evaluation on test data.
+Total trainable params: **769**
 
-After evaluation and taking confusion matrix, we get the heatmap as
+---
 
-![visua](https://user-images.githubusercontent.com/76419241/169283977-d5dd9822-fddd-432a-a384-9a5b79002282.png)
+## ⚙️ Setup
+```bash
+pip install tensorflow==2.6
+pip install tensorflow-hub
+pip install tensorflow-text
+pip install scikit-learn pandas numpy
+```
 
-   
-We can further get our model's report based on confusion matrix
+> ⚠️ TF, TF Hub, and TF Text versions must be compatible. See the [official guide](https://www.tensorflow.org/text/tutorials/classify_text_with_bert).
 
-![accur](https://user-images.githubusercontent.com/76419241/169284215-e9617563-b9d5-471f-ac53-6c8befdd7681.png)
+---
 
-And, finally we can check the perfomace of our model on random datasets
+## 📈 Results
 
-![probab](https://user-images.githubusercontent.com/76419241/169284366-b431eb25-3f3a-4991-a271-20e438bd2b0a.png)
+| Metric | Value |
+|---|---|
+| Overall accuracy | **88%** |
+| Spam recall | **0.92** |
+| Test samples | 374 |
 
-**To be noted, here we can see the probabilities of our new sentences of how close are they to be considered as spam.
-Further we can refine this model, to exavctly predict it in as 1 or 0(spam or not) by simply applying (>0.5) condition.**
+| Class | Precision | Recall | F1-score |
+|---|---|---|---|
+| Ham (0) | 0.91 | 0.84 | 0.87 |
+| Spam (1) | 0.85 | 0.92 | 0.88 |
 
+Spam recall of 0.92 means the model correctly catches 92% of spam — the more important metric here.
 
+---
+
+## 🔮 Inference Example
+```python
+reviews = [
+    'Enter a chance to win $5000, hurry up, offer valid until march 31',
+    'Hey Sam, are you coming for a cricket game tomorrow',
+]
+predictions = model.predict(reviews)
+# Apply threshold: probability > 0.5 → Spam
+```
+
+| Message | Probability | Prediction |
+|---|---|---|
+| "Enter a chance to win $5000..." | 0.606 | 🔴 Spam |
+| "Hey Sam, cricket game tomorrow" | 0.486 | 🟢 Ham |
+
+---
+
+## 🔧 Possible Improvements
+
+- [ ] Unfreeze top N BERT encoder layers for full fine-tuning
+- [ ] Use full imbalanced dataset with class weights instead of undersampling
+- [ ] Try smaller BERT variant (`bert_en_uncased_L-4_H-512_A-8`) for faster inference
+- [ ] Deploy as a Flask / FastAPI endpoint
+- [ ] Add a Streamlit UI for live predictions
+
+---
+
+## 📚 References
+
+- [BERT fine-tuning with TensorFlow — official tutorial](https://www.tensorflow.org/text/tutorials/classify_text_with_bert)
+- [BERT encoder — TF Hub](https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/4)
+- [Dropout layers explained](https://towardsdatascience.com/machine-learning-part-20-dropout-keras-layers-explained-8c9f6dc4c9ab)
+- [Dataset — Kaggle](https://www.kaggle.com/code/sid321axn/sms-spam-classifier-naive-bayes-ml-algo/data)
